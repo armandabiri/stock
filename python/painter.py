@@ -6,6 +6,7 @@ from PIL import Image as im
 from PIL import ImageTk,ImageDraw
 import os
 from tkinter.filedialog import *
+from sklearn.preprocessing import MinMaxScaler
 
 root=Tk()
 root.geometry("800x600")

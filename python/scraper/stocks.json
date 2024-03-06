@@ -1,0 +1,25 @@
+{
+    "SP500": {
+        "url": "",
+        "symbols": [
+            "AAPL",
+            "MSFT",
+            "AMZN",
+            "GOOGL",
+            "GOOG"
+        ]
+    },
+    "NASDAQ-100": {
+        "url": "",
+        "symbols": [
+            "AAPL",
+            "MSFT",
+            "AMZN",
+            "GOOGL",
+            "GOOG",
+            "FB",
+            "TSLA",
+            "NVDA"
+        ]
+    }
+}
