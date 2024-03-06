@@ -1,0 +1,161 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © loxx
+
+//@version=5
+indicator("Nearest Neighbor Extrapolation of Price [Loxx]",
+     shorttitle = "NNEP [Loxx]",
+     overlay = true,
+     max_lines_count = 500)
+
+greencolor = #2DD204
+redcolor = #D2042D
+
+darkGreenColor =  #1B7E02
+darkRedColor = #93021F
+
+_nn(Npast, Nfut, lastbar)=>
+
+    xnn = array.new<float>(Npast + Nfut, 0.)
+    ynn = array.new<float>(Npast + Nfut, 0.)
+
+    mx = array.new<float>(Npast - Nfut + 1, 0.)
+    sx = array.new<float>(Npast - Nfut + 1, 0.)
+
+    sxx = array.new<float>(Npast - Nfut + 1, 0.)
+    denx = array.new<float>(Npast - Nfut + 1, 0.)
+    sxy = array.new<float>(Npast - Nfut + 1, 0.)
+
+    my = 0.0
+    syy = 0.0
+    sumx  =0.0
+    sumxx =0.0
+    sumxxx = 0.
+    si = Npast * (Npast + 1) / 2
+
+    for i = 0 to Npast - 1
+        y = nz(open[Npast + i + lastbar])
+        my += y * (i + 1)
+        syy += y * y * (i + 1)
+
+    deny = syy * si - my * my
+
+    deny := math.sqrt(deny)
+
+    for k = 0 to Npast - Nfut
+        if (k == 0)
+            array.set(mx, 0, 0)
+            array.set(sx, 0, 0)
+
+            sumx := 0.0
+            sumxxx := 0.0
+            for i = 0 to Npast - 1
+                x = nz(open[i + lastbar])
+                xx = x * x
+                array.set(mx, 0, array.get(mx, 0) + x * (i + 1))
+                array.set(sxx, 0, array.get(sxx, 0) + xx * (i + 1))
+                sumx += x
+                sumxx += xx
+        else
+            xnew = nz(open[k + Npast - 1 + lastbar])
+            xold = nz(open[k - 1 + lastbar])
+            array.set(mx, k, array.get(mx, k - 1) - sumx + xnew * Npast)
+            array.set(sxx, k, array.get(sxx, k - 1) - sumxx + xnew * xnew * Npast)
+            sumx += xnew - xold
+            sumxx += xnew * xnew - xold * xold
+        array.set(denx, k, array.get(sxx, k) * si - math.pow(array.get(mx, k), 2))
+
+    // Calculation of cross-correlation sums,
+    // correlation coefficients and finding nearest neighbors
+    error = "Passed"
+    stop = false
+
+    b = 0.
+    corrMax = 0.
+    int knn = 0
+    corr =0.
+    for k = 0 to Npast - Nfut
+        array.set(sxy, k, 0.)
+        for i = 0 to Npast  - 1
+            array.set(sxy, k, array.get(sxy, k) + nz(open[k + i + lastbar]) * nz(open[Npast + i + lastbar]) * (i + 1))
+
+        // Calculate the correlation coefficient
+        if array.get(denx, k) <= 0
+            stop := true
+            error := "Null or negative value of the expression sxx[k]*Npast-mx[k]*mx[k]. Skip pattern # " + str.tostring(k)
+            continue
+
+        num = array.get(sxy, k) * si - array.get(mx, k) * my
+        corr := num / math.sqrt(array.get(denx, k)) / deny
+        if (corr > corrMax)
+            corrMax := corr
+            knn := k
+            b := num / array.get(denx, k)
+
+    delta = nz(open[1 + lastbar]) - b * nz(open[knn + Npast - 1 + lastbar])
+
+    // Calculate xm[] and ym[] by nearest neighbor scaling
+    for i = 0 to Npast + Nfut - 1
+        if (i <= Npast - 1)
+            array.set(xnn, Npast - 1 - i, b * nz(open[knn + i + lastbar]) + delta)
+        if (i >= Npast - 1)
+            array.set(ynn, i - Npast + 1, b * nz(open[knn + i + lastbar]) + delta)
+    [xnn, ynn, stop, error]
+
+Npast = input.int(300, "Past Bars", group = "Basic Settings", tooltip = "How many bars for the calculation")
+Nfut = input.int(50, "Future Bars", group = "Basic Settings")
+lastbar = input.int(50, "Last Back", group = "Basic Settings", tooltip = "How many bars back to start forecast? Useful to show past prediction accuracy")
+
+barsbark = input.int(200, "How many bars to calculate plots on?", group = "Calculation Time Settings", tooltip = "This prevents Pine from trying to calculate on all past bars")
+mutebars = input.bool(true, "Bar color muting?", group = "UI Options")
+
+var fvlines = array.new_line(0)
+if barstate.isfirst
+    for i = 0 to 500 - 1
+        array.push(fvlines, line.new(na, na, na, na))
+
+out = 0.
+if last_bar_index - bar_index < barsbark
+    [xnn, _, _, _] = _nn(Npast, Nfut, 0)
+    out := array.get(xnn, 0)
+
+if barstate.islast
+    [xnn, ynn, stop, error] = _nn(Npast, Nfut, lastbar)
+
+    ym = array.copy(ynn)
+    int i = 0
+    int j = 0
+
+    skipperfv = array.size(ym) >= 2000 ? 8 : array.size(ym) >= 1000 ? 4 : array.size(ym) >= 500 ? 2 : 1
+
+    i := 0
+    j := 0
+    while i < Nfut - skipperfv
+
+        if j > array.size(fvlines) - 1
+            break
+
+        fvline = array.get(fvlines, j)
+        line.set_xy1(fvline, bar_index + i + 1 - lastbar, array.get(ym, i + skipperfv))
+        line.set_xy2(fvline, bar_index + i + 1 - skipperfv - lastbar, array.get(ym, i))
+        line.set_color(fvline, color.blue)
+        line.set_style(fvline, line.style_solid)
+        line.set_width(fvline, 3)
+
+        i += skipperfv
+        j += 1
+
+    strout = stop ? "🚨 " + error : "✅ Passed"
+    colort = stop ? darkRedColor : darkGreenColor
+    var testTable = table.new(position = position.bottom_right, columns = 2, rows = 1, bgcolor = colort, border_width = 1)
+    table.cell(table_id = testTable, column = 0, row = 0, text = strout, text_color = color.white, text_size = size.large)
+
+colorout = greencolor
+
+thisis = last_bar_index - bar_index < barsbark and bar_index <= last_bar_index - lastbar
+plot(thisis? out : na, color = colorout, linewidth = 3)
+
+barcolor(mutebars and last_bar_index - bar_index < barsbark ? color.gray : na)
+
+
+
+

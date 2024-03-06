@@ -1,0 +1,78 @@
+//@version=5
+indicator(title="Improved Kalman Filter with Constant Acceleration Motion Model", shorttitle="Kalman CA Filter", overlay=true)
+
+// User Inputs for Kalman Filter Parameters
+d = input.int(2, title="Memory Depth", minval = 1)
+q = input.float(1, title="Process Noise Covariance", minval = 0.0)
+r = input.float(1, title="Measurement Noise Covariance", minval = 0.0)
+dt = input.float(1, title="Time Step", minval = 0.0)
+
+// Dimensions of matrices
+n = 3 // State dimension (position, velocity, acceleration)
+m = 1 // Measurement dimension
+
+// Initial State
+var float x = close // Initial position based on close price
+var float v = 100 // Initial velocity
+var float a = 100 // Initial acceleration
+X = matrix.new<float>(n, 1, 0)
+X.set(0, 0,x)
+X.set(1, 0,v)
+X.set(2, 0,a)
+
+// State Transition Matrix (F) for Constant Acceleration
+F = matrix.new<float>()
+F.add_row(0, array.from(1, dt, 0.5*dt*dt))
+F.add_row(1, array.from(0, 1, dt))
+F.add_row(2, array.from(0, 0, 1))
+
+// Measurement Matrix (H)
+H = matrix.new<float>(1, n, 0)
+H.set(0, 0, 1.0)
+
+// Process Noise Covariance Matrix (Q)
+Q = matrix.new<float>(n,n, 0.0)
+Q.set(0, 0, q)
+Q.set(1, 1, 10*q)
+Q.set(2, 2, 100*q)
+
+// Measurement Noise Covariance Matrix (R)
+R = matrix.new<float>(m, m, 0.0)
+for i=0 to m-1
+    R.set(i, i, r)
+
+// Error Covariance Matrix (P) - Initial Guess
+var matrix<float> P = matrix.new<float>(n,n, 0.0)
+for i=0 to n-1
+    P.set(i, i, 1.0)
+
+// Identity Matrix (I) for later calculations
+var matrix<float> I = matrix.new<float>(n,n, 0.0)
+for i=0 to n-1
+    I.set(i, i, 1.0)
+
+// Kalman Filter Main Loop
+for i = 0 to d
+    // Predict
+    X := matrix.mult(F, X) // Predicted State Estimate
+    P := matrix.sum(matrix.mult(matrix.mult(F, P), matrix.transpose(F)), Q) // Predicted Error Covariance
+
+    // Update
+    float z = close[d-i] // Measurement at current step
+
+    Z=matrix.new<float>(m, m, 0.0)
+    Z.set(0, 0, z) // Measurement Matrix
+
+    matrix<float> Y = matrix.diff(Z, matrix.mult(H, X)) // Measurement Pre-fit Residual
+    matrix<float> S = matrix.sum(matrix.mult(matrix.mult(H, P), matrix.transpose(H)), R) // Residual Covariance
+    matrix<float> K = matrix.mult(matrix.mult(P, matrix.transpose(H)), matrix.pinv(S)) // Kalman Gain
+    X := matrix.sum(X, matrix.mult(K, Y)) // Updated State Estimate
+    P := matrix.mult(matrix.diff(I, matrix.mult(K, H)), P) // Updated Error Covariance
+
+// Extracting and Plotting the Filtered Position
+float x_filtered = matrix.get(X, 0, 0)
+plot(x_filtered, title="Filtered Position", color=color.blue, linewidth=4)
+
+string str = 'v=' + str.tostring(matrix.get(X, 1, 0), "2.2")+ ', a=' + str.tostring(matrix.get(X, 2, 0), "2.2")
+var testTable = table.new(position = position.bottom_right, columns = 2, rows = 1, bgcolor = color.black, border_width = 1)
+table.cell(table_id = testTable, column = 0, row = 0, text = str, text_color = color.white, text_size = size.small)
