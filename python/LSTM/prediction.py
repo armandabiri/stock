@@ -10,6 +10,7 @@ from tensorflow import keras
 from keras.layers import Input
 import matplotlib.dates as mdates
 import mplcursors
+from datetime import datetime
 
 class StockPredictor:
     def __init__(self, csvfile='data/NASDAQ-100_Close.csv', model='LSTM', ticker=None):
@@ -108,6 +109,7 @@ class StockPredictor:
         X = self.x_test[-1, :,:].reshape(1, self.x_test.shape[1], self.x_test.shape[2])
         y_pred = []
         for i in range(0, days):
+            print(f'Predicting day {i+1} of {days}')
             y = model.predict(X)
             if X.shape[2]==1:
                 X = np.append(X, y[0,0].reshape(1, 1, 1), axis=1)
@@ -153,14 +155,19 @@ class StockPredictor:
             x, y = sel.target
             sel.annotation.set_text(f'x={x}, y={y}')
 
+        # Get the current date and time
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Assuming your figure is stored in a NumPy array called np_figure
+        np.save(f'images/{self.stock_model}_{timestamp}.png', fig)
         plt.show()
 
 
 def main():
-    stock_predictor = StockPredictor(csvfile='data/ABNB.csv')
-    stock_predictor.prep_data(time_frame=56, time_horizon=14, split_proportion=0.8)
-    # stock_predictor.train(neurons=[96, 96, 96], dropout=[0.25], epochs=20, batch_size=32)
-    stock_predictor.predict(days=356)
+    stock_predictor = StockPredictor(csvfile='data/NVDA.csv')
+    stock_predictor.prep_data(time_frame=30, time_horizon=2, split_proportion=0.9)
+    stock_predictor.train(neurons=[196, 96, 196, 96, 196], dropout=[0.1], epochs=20, batch_size=32)
+    stock_predictor.predict(days=500)
 
 
 if __name__ == '__main__':

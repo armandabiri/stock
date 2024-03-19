@@ -176,7 +176,7 @@ def main():
 
     folder="data"
     start_date = "2018-01-01"
-    end_date = "2024-03-01"
+    end_date = "2024-04-06"
 
     pickle_files=get_pickle_files(folder)
     for picklefile in pickle_files:
