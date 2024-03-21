@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+    <!-- Define a custom display for matrix::MatrixX -->
+    <Type Name="matrix::Matrix&lt;*&gt;">
+        <DisplayString>
+            {{
+                // Initialize an empty string to store the result
+                std::string displayString;
+
+                // Iterate over the rows
+                for (size_t i = 0; i &lt; rows_; ++i) {
+                    // Iterate over the columns
+                    for (size_t j = 0; j &lt; cols_; ++j) {
+                        // Append the element to the display string
+                        displayString += std::to_string(data_[i][j]);
+                        // Add a comma and space if it's not the last element in the row
+                        if (j &lt; cols_ - 1) {
+                            displayString += ", ";
+                        }
+                    }
+                    // Add a newline if it's not the last row
+                    if (i &lt; rows_ - 1) {
+                        displayString += "\n";
+                    }
+                }
+                displayString; // Return the constructed string
+            }}
+        </DisplayString>
+        <Expand>
+            <!-- Display data_ -->
+            <Item Name="Data">data_</Item>
+        </Expand>
+    </Type>
+
+    <!-- Define how to display std::vector<std::vector<T>> -->
+    <Type Name="std::vector&lt;std::vector&lt;*&gt;&gt;">
+        <DisplayString>{{ Size = {size()} }}</DisplayString>
+        <Expand>
+            <!-- Display data as a two-dimensional array -->
+            <ArrayItems>
+                <Size>$e.size()</Size>
+                <ValuePointer>$e.data()</ValuePointer>
+            </ArrayItems>
+        </Expand>
+    </Type>
+
+
+</AutoVisualizer>

@@ -39,11 +39,16 @@ class FNN {
     layers_.push_back(nn::Layer(hidden_layers.back(), output_size, option));
   }
 
+  template <typename... Args>
+  void emplaceLayer(Args&&... args) {
+    layers_.emplace_back(std::forward<Args>(args)...);
+  }
+
   Eigen::VectorXd forward(const Eigen::VectorXd& inputs) {
     Eigen::VectorXd layerOutput = inputs;
 
-    for (size_t i = 0; i < layers_.size(); ++i) {
-      layerOutput = layers_[i].forward(layerOutput);
+    for (auto& layer : layers_) {
+      layerOutput = layer.forward(layerOutput);
     }
 
     return layerOutput;
@@ -67,25 +72,29 @@ class FNN {
 
   void train(const Eigen::MatrixXd& inputs, const Eigen::MatrixXd& targets,
              const int& epochs = 1000, const double& feval = 1e-6, const bool report = true) {
-    if (targets.rows() != inputs.rows()) {
+    const size_t numInputs = inputs.rows();
+
+    if (targets.rows() != numInputs) {
       std::cerr << "Error: output and inputs row size mismatch" << std::endl;
       return;
     }
 
-    if (inputs.cols() != layers_[0].size()) {
+    const size_t inputSize = layers_[0].size();
+    if (inputs.cols() != inputSize) {
       std::cerr << "Error: inputs and layer 0 size mismatch" << std::endl;
       return;
     }
 
-    auto lastlayer_sizes = layers_.back().sizes();
-    if (targets.cols() != lastlayer_sizes[1]) {
+    const auto& lastLayerSizes = layers_.back().sizes();
+    const size_t outputSize = lastLayerSizes[1];
+    if (targets.cols() != outputSize) {
       std::cerr << "Error: targets and layer N size mismatch" << std::endl;
       return;
     }
 
-    Eigen::VectorXd errors(inputs.rows());
+    Eigen::VectorXd errors(numInputs);
     for (int epoch = 0; epoch < epochs; ++epoch) {
-      for (int i = 0; i < inputs.rows(); ++i) {
+      for (size_t i = 0; i < numInputs; ++i) {
         Eigen::VectorXd output = forward(inputs.row(i));
         backward(inputs.row(i), targets.row(i));
 

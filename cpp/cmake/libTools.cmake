@@ -28,7 +28,7 @@ function(build_static_library_current DEPENDENCIES)
     get_filename_component(LIBRARY_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 
     file(GLOB SRC
-        "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
     string(TOUPPER "${LIBRARY_NAME}" LIBRARY_UPPERCASE)
     set(FULL_LIBRARY_NAME "lib${LIBRARY_UPPERCASE}")
@@ -48,7 +48,7 @@ function(build_shared_library_current DEPENDENCIES VERSION)
     set(MINOR_VERSION ${CMAKE_MATCH_2}) # Group 2: branch name
 
     file(GLOB SRC
-        "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp")
 
     file(GLOB HEADERS
         "${CMAKE_CURRENT_SOURCE_DIR}/include/${LIBRARY_NAME}/*.h"
@@ -90,6 +90,8 @@ function(include_test dependencies)
     foreach(SRC ${SRC_LIST})
         get_filename_component(FILENAME ${SRC} NAME_WE)
         add_executable(${FILENAME} ${SRC})
+        target_sources(${FILENAME} PRIVATE ${CMAKE_SOURCE_DIR}/sources/matrix.natvis)
+
         target_link_libraries(${FILENAME} PUBLIC ${FULL_LIBRARY_NAME} ${dependencies})
     endforeach()
 endfunction()
@@ -105,7 +107,8 @@ function(add_gtests)
 
             foreach(file ${files})
                 get_filename_component(test_name ${file} NAME_WE) # Get the base name without extension
-                add_executable(${test_name} "${file}")
+                add_executable(${test_name} "${file}" "sources/matrix.natvis")
+
                 string(TOUPPER ${lib} LIB)
                 target_link_libraries(${test_name} GTest::gtest_main ${LIB})
                 set_target_properties(${test_name} PROPERTIES

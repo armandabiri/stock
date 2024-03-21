@@ -24,7 +24,7 @@ int main() {
   std::uniform_real_distribution<> dis(-1.0, 1.0);  // Random numbers between -1 and 1
 
   std::vector<double> X = linspace(0.0, 2 * pi, 400);
-  std::vector<double> Xi = linspace(0.0, 2 * pi, 100);
+  std::vector<double> Xi = linspace(0.0, 2 * pi, 5);
 
   std::vector<double> Y(X.size());
 
