@@ -14,9 +14,9 @@ class VectorX : public MatrixX<T> {
  public:
   // Constructor
   VectorX() : MatrixX<T>() {}
-  VectorX(size_t size) : MatrixX<T>(size, 1) {}
-  VectorX(size_t size, T value) : MatrixX<T>(size, 1, value) {}
-  // initialized with <<
+  VectorX(const size_t& size1, const T& value = 0, const size_t& size2 = 1)
+      : MatrixX<T>(size1, size2, value) {}
+
   VectorX(std::initializer_list<T> list) : MatrixX<T>(list.size(), 1) {
     size_t i = 0;
     for (auto it = list.begin(); it != list.end(); ++it) {
@@ -24,10 +24,8 @@ class VectorX : public MatrixX<T> {
     }
   }
 
-  size_t size() const { return this->rows() * this->cols(); }
-
   VectorX<T> cross(const VectorX<T>& other) const {
-    if (this->size() != 3 || other.size() != 3) {
+    if (this->numel() != 3 || other.numel() != 3) {
       throw std::invalid_argument("Cross product is only defined for 3D vectors");
     }
 
@@ -44,32 +42,19 @@ class VectorX : public MatrixX<T> {
 
   /// overloaded operators
   VectorX<T> operator+(const VectorX<T>& other) const {
-    if (this->size() != other.size()) {
+    if (this->numel() != other.numel()) {
       throw std::invalid_argument("Vector sizes do not match");
     }
-    VectorX<T> result(this->size());
-    for (size_t i = 0; i < size(); ++i) {
+    VectorX<T> result(this->numel());
+    for (size_t i = 0; i < numel(); ++i) {
       result(i) = (*this)(i) + other(i);
     }
     return result;
   }
 
-  // friend MatrixX<T> operator*(const VectorX<T>& vector, const MatrixX<T>& matrix) {
-  //   if (vector.cols() != matrix.rows()) {
-  //     throw std::invalid_argument(
-  //         "Vector size must match matrix number of rows for multiplication.");
-  //   }
-
-  //   MatrixX<T> result =
-  //       vector *
-  //       matrix;  // Resulting vector will have the same number of elements as matrix columns
-
-  //   return result;
-  // }
-
   // Define operator* for matrix * vector
   friend VectorX<T> operator*(const MatrixX<T>& matrix, const VectorX<T>& vector) {
-    if (vector.size() != matrix.cols()) {
+    if (vector.rows() != matrix.cols()) {
       throw std::invalid_argument(
           "Vector size must match matrix number of columns for multiplication.");
     }
@@ -88,8 +73,33 @@ class VectorX : public MatrixX<T> {
 
     return result;
   }
+
+  // transpose
+  VectorX<T> transpose() const {
+    MatrixX<T> result(this->cols_, this->rows_);
+    for (size_t i = 0; i < this->numel(); ++i) {
+      result(i) = (*this)(i);
+    }
+    return result;
+  }
+
+  friend std::ostream& operator<<(std::ostream& os, const matrix::VectorX<T>& vector) {
+    os << std::setw(8) << std::fixed << std::setprecision(2);
+    os << "[";
+    if (vector.cols() == 1) {
+      for (size_t i = 0; i < vector.rows(); ++i) {
+        std::cout << vector(i) << ", ";
+      }
+    } else {
+      for (size_t i = 0; i < vector.cols(); ++i) {
+        std::cout << vector(i) << "; ";
+      }
+    }
+    os << "]";
+    return os;
+  };
 };
 
 typedef VectorX<double> Vector;
 typedef VectorX<float> Vectorf;
-}  // namespace matrix
+};  // namespace matrix

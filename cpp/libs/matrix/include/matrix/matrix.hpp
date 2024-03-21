@@ -21,7 +21,8 @@
 #endif
 
 namespace matrix {
-
+template <typename T>
+class VectorX;
 template <typename T = double>
 class MatrixX {
  public:
@@ -293,16 +294,95 @@ class MatrixX {
 
   const T& operator()(const size_t& i, const size_t& j) const { return data_[i][j]; }
 
-  friend std::ostream& operator<<(std::ostream& os, const MatrixX& matrix) {
-    os << "[\n";
+  friend std::ostream& operator<<(std::ostream& os, const MatrixX<T>& matrix) {
+    os << std::setw(8) << std::fixed << std::setprecision(2) << "\n";
     for (size_t i = 0; i < matrix.rows_; ++i) {
       for (size_t j = 0; j < matrix.cols_; ++j) {
-        os << std::setw(8) << std::fixed << std::setprecision(2) << matrix.data_[i][j] << " ";
+        os << matrix.data_[i][j] << ", ";
       }
       os << std::endl;
     }
-    os << "]";
     return os;
+  }
+
+  // get column
+  VectorX<T> col(size_t index) const {
+    if (index >= cols_) {
+      throw std::invalid_argument("Index out of range");
+    }
+    VectorX<T> result(rows_);
+    for (size_t i = 0; i < rows_; ++i) {
+      result(i) = data_[i][index];
+    }
+    return result;
+  }
+
+  // get row
+  VectorX<T> row(size_t index) const {
+    if (index >= rows_) {
+      throw std::invalid_argument("Index out of range");
+    }
+    VectorX<T> result(cols_);
+    for (size_t i = 0; i < cols_; ++i) {
+      result(i) = data_[index][i];
+    }
+    return result;
+  }
+
+  // get multiple cols by give the index vector
+  MatrixX<T> col(const std::vector<size_t>& indices) const {
+    MatrixX<T> result(rows_, indices.size());
+    for (size_t i = 0; i < indices.size(); ++i) {
+      if (indices[i] >= cols_) {
+        throw std::invalid_argument("Index out of range");
+      }
+      for (size_t j = 0; j < rows_; ++j) {
+        result(j, i) = data_[j][indices[i]];
+      }
+    }
+    return result;
+  }
+
+  // get multiple cols by give the index vector
+  MatrixX<T> row(const std::vector<size_t>& indices) const {
+    MatrixX<T> result(indices.size(), cols_);
+    for (size_t i = 0; i < indices.size(); ++i) {
+      if (indices[i] >= rows_) {
+        throw std::invalid_argument("Index out of range");
+      }
+      for (size_t j = 0; j < cols_; ++j) {
+        result(i, j) = data_[indices[i]][j];
+      }
+    }
+    return result;
+  }
+
+  // get column in the rang
+  MatrixX<T> col(size_t start, size_t end) const {
+    if (start >= cols_ || end >= cols_ || start > end) {
+      throw std::invalid_argument("Index out of range");
+    }
+    MatrixX<T> result(rows_, end - start + 1);
+    for (size_t i = 0; i < end - start + 1; ++i) {
+      for (size_t j = 0; j < rows_; ++j) {
+        result(j, i) = data_[j][start + i];
+      }
+    }
+    return result;
+  }
+
+  // get row in the rang
+  MatrixX<T> row(size_t start, size_t end) const {
+    if (start >= rows_ || end >= rows_ || start > end) {
+      throw std::invalid_argument("Index out of range");
+    }
+    MatrixX<T> result(end - start + 1, cols_);
+    for (size_t i = 0; i < end - start + 1; ++i) {
+      for (size_t j = 0; j < cols_; ++j) {
+        result(i, j) = data_[start + i][j];
+      }
+    }
+    return result;
   }
 
   /// Overloaded operator for scalar
@@ -771,6 +851,13 @@ class MatrixX {
   // get data
   std::vector<std::vector<T>> vec() const { return data_; }
 
+  // get length
+  size_t length() const { return cols() * rows(); }
+  size_t numel() const { return length(); }
+
+  // get size
+  std::vector<size_t> size() const { return std::vector<size_t>{rows, cols()}; }
+
   // get data array
   std::vector<T> array() const {
     std::vector<T> result(rows_ * cols_);
@@ -787,6 +874,22 @@ class MatrixX {
 
   // get raw data
   T* data() { return data_[0].data(); }
+
+  operator VectorX<T>() const {
+    VectorX<T> result;
+    if (cols() == 1 || rows() == 1) {
+      result = VectorX<T>(rows(), 0, cols());
+      for (size_t i = 0; i < length(); ++i) {
+        result(i) = (*this)(i);
+      }
+    } else {
+      throw std::invalid_argument("Matrix must have only one column or row to be cast to a vector");
+    }
+
+    return result;
+  };
+
+  void print() { std::cout << *this; }
 
  protected:
   std::vector<std::vector<T>> data_;
@@ -807,4 +910,4 @@ std::ostream& operator<<(std::ostream& os, const std::vector<T>& vector) {
   }
   os << "]";
   return os;
-}
+};
