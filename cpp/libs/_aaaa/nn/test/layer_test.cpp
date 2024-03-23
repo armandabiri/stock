@@ -15,7 +15,7 @@ int main() {
 
   // Define input vector
   matrix::Vector input(inputSize);
-  input.setRandom();
+  input.rand();
 
   // Forward pass
   matrix::Vector output = layer.forward(input);

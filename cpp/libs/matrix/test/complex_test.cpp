@@ -1,4 +1,4 @@
-#include "math/complex.hpp"
+#include "matrix/complex.hpp"
 
 int main() {
   math::Complex a(1, 2);
@@ -26,7 +26,7 @@ int main() {
   std::cout << "a *= b: " << (a *= b) << std::endl;
   std::cout << "a /= b: " << (a /= b) << std::endl;
 
-  std::cout << "exp(1 + 1 * math::i)= " << exp(1 + 1 * math::i) << std::endl;
+  std::cout << "exp(1 + 1 * math::i)= " << exp(1 + 1 * math::i1) << std::endl;
   std::cout << "a: " << a << std::endl;
   std::cout << "exp(a)= " << exp(a) << std::endl;
   std::cout << "exp(a + b)= " << exp(a + b) << std::endl;

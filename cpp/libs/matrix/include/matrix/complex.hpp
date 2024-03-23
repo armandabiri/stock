@@ -185,5 +185,7 @@ class ComplexX {
 typedef ComplexX<double> Complex;
 typedef ComplexX<float> Complexf;
 
-#define i Complex(0, 1)
+const Complex i1(0, 1);
+const double pi = std::atan(1) * 4;
+
 }  // namespace math

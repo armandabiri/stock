@@ -10,7 +10,7 @@
 namespace matrix {
 
 template <typename T = double>
-class VectorX : public MatrixX<T> {
+class VectorX : protected MatrixX<T> {
  public:
   // Constructor
   VectorX() : MatrixX<T>() {}
@@ -20,7 +20,7 @@ class VectorX : public MatrixX<T> {
   VectorX(std::initializer_list<T> list) : MatrixX<T>(list.size(), 1) {
     size_t i = 0;
     for (auto it = list.begin(); it != list.end(); ++it) {
-      this->data_[i++][0] = *it;
+      this->data_[i++] = *it;
     }
   }
 
@@ -54,7 +54,7 @@ class VectorX : public MatrixX<T> {
 
   // Define operator* for matrix * vector
   friend VectorX<T> operator*(const MatrixX<T>& matrix, const VectorX<T>& vector) {
-    if (vector.rows() != matrix.cols()) {
+    if (vector.rows_ != matrix.cols_) {
       throw std::invalid_argument(
           "Vector size must match matrix number of columns for multiplication.");
     }

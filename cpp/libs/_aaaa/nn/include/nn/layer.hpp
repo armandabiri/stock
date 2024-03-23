@@ -26,7 +26,7 @@ class Layer {
     // Xavier initialization for weights_
     double limit = std::sqrt(6.0 / (inputSize_ + outputSize_));
     weights_ = matrix::Matrix(outputSize_, inputSize_);
-    weights_.setRandom();
+    weights_.rand();
     weights_ *= limit;
 
     // Initialize biases_ to zeros
@@ -141,7 +141,7 @@ class Layer {
 
   // Dropout function
   void dropout(matrix::Vector& output_) {
-    for (int i = 0; i < output_.size(); ++i) {
+    for (size_t i = 0; i < output_.length(); ++i) {
       if ((double)rand() / RAND_MAX < option_.dropoutRate) {
         output_[i] = 0.0;
       }
@@ -166,7 +166,7 @@ class Layer {
   }
 
   void saveVector(const matrix::Vector& vector, std::ofstream& file) const {
-    size_t size = vector.size();
+    size_t size = vector.length();
     file.write(reinterpret_cast<const char*>(&size), sizeof(size_t));
     file.write(reinterpret_cast<const char*>(vector.data()), size * sizeof(double));
   }
