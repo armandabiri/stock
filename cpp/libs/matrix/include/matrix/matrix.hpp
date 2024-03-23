@@ -1137,7 +1137,7 @@ class MatrixX {
 
     PARALLEL_FOR_COLLAPSE(1)
     for (size_t i = 0; i < numel(); ++i) {
-      result(i, j) = static_cast<U>(data_[i]);
+      result(i) = static_cast<U>(data_[i]);
     }
 
     return result;

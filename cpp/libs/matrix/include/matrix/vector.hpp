@@ -10,7 +10,7 @@
 namespace matrix {
 
 template <typename T = double>
-class VectorX : protected MatrixX<T> {
+class VectorX : public MatrixX<T> {
  public:
   // Constructor
   VectorX() : MatrixX<T>() {}
@@ -54,7 +54,7 @@ class VectorX : protected MatrixX<T> {
 
   // Define operator* for matrix * vector
   friend VectorX<T> operator*(const MatrixX<T>& matrix, const VectorX<T>& vector) {
-    if (vector.rows_ != matrix.cols_) {
+    if (vector.rows_ != matrix.cols()) {
       throw std::invalid_argument(
           "Vector size must match matrix number of columns for multiplication.");
     }
@@ -66,9 +66,9 @@ class VectorX : protected MatrixX<T> {
     for (size_t i = 0; i < matrix.rows(); ++i) {
       T sum = 0;
       for (size_t j = 0; j < matrix.cols(); ++j) {
-        sum += matrix(i, j) * vector[j];  // Dot product between i-th row of matrix and vector
+        sum += matrix(i, j) * vector(j);  // Dot product between i-th row of matrix and vector
       }
-      result[i] = sum;
+      result(i) = sum;
     }
 
     return result;
