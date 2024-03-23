@@ -3,6 +3,7 @@
 #include <tuple>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <vector>
 #include <stdexcept>
 #include <random>
@@ -14,8 +15,10 @@
 #include "matrix/Complex.hpp"
 #include "matrix/utils.hpp"
 
-#define PARALLEL_ENABLED 1  // Set to 1 to enable parallel computing, 0 to disable
-#define STARSSAN_ENABLED 1  // Set to 1 to enable Strassen algorithm, 0 to disable
+#define TRANSFORM_ENABLED 1           // Set to 1 to enable transform, 0 to disable
+#define PARALLEL_ENABLED 1            // Set to 1 to enable parallel computing, 0 to disable
+#define STARSSAN_ENABLED 1            // Set to 1 to enable Strassen algorithm, 0 to disable
+#define DIVIDE_AND_CONQUER_ENABLED 1  // Set to 1 to enable divide and conquer, 0 to disable
 
 #if PARALLEL_ENABLED > 0
 #define PARALLEL_FOR_COLLAPSE(N) \
@@ -221,24 +224,18 @@ class MatrixX {
     std::mt19937 gen(rd());
     std::uniform_real_distribution<> dis(lowerBound, upperBound);
 
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      data_[i] = dis(gen);
-    }
+    std::transform(data_.begin(), data_.end(), data_.begin(),
+                   [&](const T& /* ignored */) { return dis(gen); });
   }
 
   // Method to generate an zero matrix
   void zeros() {
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      data_[i] = 0;
-    }
+    std::transform(data_.begin(), data_.end(), data_.begin(),
+                   [&](const T& /* ignored */) { return 0; });
   }
   void ones() {
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      data_[i] = 1;
-    }
+    std::transform(data_.begin(), data_.end(), data_.begin(),
+                   [&](const T& /* ignored */) { return 1; });
   }
 
   // Method to generate an identity matrix
@@ -283,12 +280,8 @@ class MatrixX {
   }
 
   T sum() const {
-    T result = 0.0;
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      result += data_[i];
-    }
-    return result;
+    // Use std::accumulate to sum up all elements of the matrix
+    return std::accumulate(data_.begin(), data_.end(), T(0));
   }
 
   MatrixX<T> sum(int axis) const {
@@ -314,13 +307,8 @@ class MatrixX {
   T mean() const { return sum() / (rows_ * cols_); }
 
   T prod() const {
-    T result = 1.0;
-
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      result *= data_[i];
-    }
-    return result;
+    // Use std::accumulate to calculate the product of all elements of the matrix
+    return std::accumulate(data_.begin(), data_.end(), T(1), std::multiplies<T>());
   }
 
   T trace() const {
@@ -328,13 +316,9 @@ class MatrixX {
       throw std::invalid_argument("MatrixX must be square for trace calculation");
     }
 
-    T result = 0.0;
-
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < rows_; ++i) {
-      result += (*this)(i, i);
-    }
-    return result;
+    // Use std::accumulate to calculate the trace of the matrix
+    return std::accumulate(data_.begin(), data_.end(), T(0),
+                           [&](const T& acc, const T& val) { return acc + val; });
   }
 
   T dot(const MatrixX<T>& other) const { return elementwiseProd(other).sum(); }
@@ -458,10 +442,8 @@ class MatrixX {
 
     MatrixX<T> result(rows_, cols_);
 
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      result(i) = data_[i] + other(i);
-    }
+    std::transform(data_.begin(), data_.end(), other.data_.begin(), result.data_.begin(),
+                   [](const T& a, const T& b) { return a + b; });
 
     return result;
   }
@@ -483,11 +465,9 @@ class MatrixX {
     PARALLEL_FOR_COLLAPSE(2)
     for (size_t i = 0; i < rows_; ++i) {
       for (size_t j = 0; j < other.cols_; ++j) {
-        T sum = 0;
-        for (size_t k = 0; k < cols_; ++k) {
-          sum += data_[i * cols_ + k] * other.data_[k * other.cols_ + j];
-        }
-        result.data_[i * result.cols_ + j] = sum;
+        result(i, j) =
+            std::inner_product(data_.begin() + i * cols_, data_.begin() + (i + 1) * cols_,
+                               other.data_.begin() + j, T(0));
       }
     }
 
@@ -519,27 +499,20 @@ class MatrixX {
   template <typename U>
   MatrixX<U> elementwise(const MatrixX<T>& other, std::function<U(const T&, const T&)> func) const {
     if (rows_ != other.rows_ || cols_ != other.cols_) {
-      throw std::invalid_argument("MatrixX dimensions do not match for element-wise division");
+      throw std::invalid_argument("MatrixX dimensions do not match for element-wise operation");
     }
 
     MatrixX<U> result(rows_, cols_);
 
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      result(i) = func(data_[i], other(i));
-    }
+    // Use std::transform to perform element-wise operation
+    std::transform(data_.begin(), data_.end(), other.data_.begin(), result.data_.begin(),
+                   [&](const T& a, const T& b) { return func(a, b); });
 
     return result;
   }
 
   bool all(std::function<bool(const T&)> func) const {
-    PARALLEL_ENABLED(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      if (!func(data_[i])) {
-        return false;
-      }
-    }
-    return true;
+    return std::all_of(data_.begin(), data_.end(), func);
   }
 
   bool all(const MatrixX<T>& other, std::function<bool(const T&, const T&)> func) {
@@ -547,20 +520,18 @@ class MatrixX {
       throw std::invalid_argument("MatrixX dimensions do not match for element-wise comparison");
     }
 
-    PARALLEL_ENABLED(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      if (!func(data_[i], other(i))) {
-        return false;
-      }
-    }
-    return true;
+    // Use std::mismatch to find the first element where the matrices differ
+    auto mismatchPair = std::mismatch(data_.begin(), data_.end(), other.data_.begin(), func);
+
+    // If there's no mismatch, return true
+    return mismatchPair.first == data_.end();
   }
 
   bool any(std::function<bool(const T&)> func) const {
-    return all([&func](const T& x) { return !func(x); });
+    return std::any_of(data_.begin(), data_.end(), func);
   }
   bool any(const MatrixX<T>& other, std::function<bool(const T&, const T&)> func) {
-    return all(other, [&func](const T& x, const T& y) { return !func(x, y); });
+    return !all(other, [&](const T& x, const T& y) { return !func(x, y); });
   }
 
   MatrixX<T> elementwiseProd(const MatrixX<T>& other) const {
@@ -722,6 +693,24 @@ class MatrixX {
       ++newRow;
     }
     return result;
+  }
+
+  static void DivideAndConquer(std::vector<T>& vec,
+                               std::function<void(std::vector<T>&)> operation) {
+    // Base case: If the vector is empty or has only one element, apply the operation directly
+    if (vec.size() <= 1) {
+      operation(vec);
+      return;
+    }
+
+    // Split the vector into two halves
+    size_t mid = vec.size() / 2;
+    std::vector<T> left(vec.begin(), vec.begin() + mid);
+    std::vector<T> right(vec.begin() + mid, vec.end());
+
+    // Recursively apply the operation on each half
+    DivideAndConquer(left, operation);
+    DivideAndConquer(right, operation);
   }
 
   // cofactor
@@ -1301,19 +1290,52 @@ class MatrixX {
   }
 
   /// Saving Data
-  void save(std::ofstream& file) const {
-    // Write the size of the outer vector
-    size_t outerSize = data.size();
-    file.write(reinterpret_cast<const char*>(&outerSize), sizeof(size_t));
-
-    for (const auto& innerVec : data) {
-      // Write the size of the inner vector
-      size_t innerSize = innerVec.size();
-      file.write(reinterpret_cast<const char*>(&innerSize), sizeof(size_t));
-
-      // Write the elements of the inner vector
-      file.write(reinterpret_cast<const char*>(innerVec.data()), sizeof(T) * innerSize);
+  void save(const std::string& filename) const {
+    std::ofstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+      std::cerr << "Error: Failed to open file for writing: " << filename << std::endl;
+      return;
     }
+
+    save(file);
+
+    file.close();
+    std::cout << "The matrix is saved successfully." << filename << std::endl;
+  }
+
+  void save(std::ofstream& file) const {
+    std::cout << "Saving matrix to file" << std::endl;
+    file.write(reinterpret_cast<const char*>(&rows_), sizeof(size_t));
+    file.write(reinterpret_cast<const char*>(&cols_), sizeof(size_t));
+    file.write(reinterpret_cast<const char*>(data_.data()), sizeof(T) * numel());
+  }
+
+  /// Loading Data
+  void load(const std::string& filename) {
+    std::cout << "Loading matrix from file" << std::endl;
+    std::ifstream file(filename, std::ios::binary);
+    if (!file.is_open()) {
+      std::cerr << "Error: Failed to open file for reading: " << filename << std::endl;
+      return;
+    }
+
+    load(file);
+
+    file.close();
+    std::cout << "The matrix is loaded successfully." << filename << std::endl;
+  }
+
+  void load(std::ifstream& file) {
+    file.read(reinterpret_cast<char*>(&rows_), sizeof(size_t));
+    file.read(reinterpret_cast<char*>(&cols_), sizeof(size_t));
+    data_.resize(rows_ * cols_);
+    file.read(reinterpret_cast<char*>(data_.data()), sizeof(T) * rows_ * cols_);
+  }
+
+  static MatrixX<T> Load(const std::string& filename) {
+    MatrixX<T> result;
+    result.load(filename);
+    return result;
   }
 
   // Strassen's algorithm for matrix multiplication
@@ -1433,17 +1455,15 @@ class onesX : public MatrixX<T> {
 };
 
 template <typename T>
-class randnX : public MatrixX<T> {
- public:
-  randnX(const size_t& rows, const size_t& cols) : MatrixX<T>(rows, cols) { rand(); }
-  randnX(const size_t& n) : MatrixX<T>(n, n) { rand(); }
-};
-
-template <typename T>
 class randX : public MatrixX<T> {
  public:
-  randX(const size_t& rows, const size_t& cols) : MatrixX<T>(rows, cols) { rand(); }
-  randX(const size_t& n) : MatrixX<T>(n, n) { rand(); }
+  randX(const size_t& rows, const size_t& cols, const T& lower_bound = -1, const T& upper_bound = 1)
+      : MatrixX<T>(rows, cols) {
+    rand(lower_bound, upper_bound);
+  }
+  randX(const size_t& n, const T& lower_bound = -1, const T& upper_bound = 1) : MatrixX<T>(n, n) {
+    rand(lower_bound, upper_bound);
+  }
 };
 
 typedef MatrixX<double> Matrix;
@@ -1456,8 +1476,6 @@ typedef zerosX<double> zeros;
 typedef zerosX<float> zerosf;
 typedef onesX<double> ones;
 typedef onesX<float> onesf;
-typedef randnX<double> randn;
-typedef randnX<float> randnf;
 typedef randX<double> rand;
 typedef randX<float> randf;
 

@@ -1,4 +1,6 @@
 
-build_static_library_current("adroco::time")
+build_static_library_current("adroco::time;Eigen3::Eigen")
 
-include_test("")
+add_tests("")
+
+# add_gtests("")

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <thread>
 
 inline static double tic(int mode = 0) {
   static double t_start;
@@ -16,6 +17,12 @@ inline static double tic(int mode = 0) {
     return duration;
   }
 }
+
+inline void wait(const double& seconds) {
+  std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(seconds * 1e3)));
+}
+
+inline void sleep(const double& seconds) { wait(seconds); }
 
 inline static double toc() { return tic(1); }
 

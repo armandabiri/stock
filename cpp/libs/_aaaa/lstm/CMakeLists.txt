@@ -3,7 +3,7 @@ project(LSTM VERSION 1.0)
 
 build_static_library_current("")
 
-include_test("")
+add_tests("")
 
 # add_library(LSTM
 # lstm.cpp

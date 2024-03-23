@@ -1,3 +1,3 @@
 
 build_static_library_current("")
-include_test("Matplot++::matplot")
+add_tests("Matplot++::matplot")

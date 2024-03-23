@@ -233,7 +233,7 @@ function(build_and_install_project PATH CMAKE_CONFIG BUILD_CONFIG BUILD_DIR REPO
         set(BUILD_CONFIG "")
       endif()
 
-      foreach(config IN ITEMS debug release)
+      foreach(config IN ITEMS debug release debug)
         set(command cmake --build . --parallel 24 --config ${config} ${BUILD_CONFIG})
         message(">>>>>>>>>>>>>>>>>>>>>> Building [${REPO_NAME} :: ${config} mode] >>>>>>>>>>>>>>>>>>> ${command}")
 
@@ -253,7 +253,7 @@ function(build_and_install_project PATH CMAKE_CONFIG BUILD_CONFIG BUILD_DIR REPO
     endif()
   endif()
 
-  if((${FORCE_UPDATE} STREQUAL "REBUILD") OR ${FORCE_UPDATE} STREQUAL "INSTALL" OR ${FORCE_UPDATE} STREQUAL "ALL")
+  if((${FORCE_UPDATE} STREQUAL "REBUILD") OR ${FORCE_UPDATE} STREQUAL "INSTALL" OR ${FORCE_UPDATE} STREQUAL "ALL" OR ${FORCE_UPDATE} STREQUAL "ON")
     # foreach(BUILD_TYPE IN ITEMS debug release)
     set(command cmake --build . --target install --config ${BUILD_TYPE})
     message(">>>>>>>>>>>>>>>>>>>>>> Installing [${REPO_NAME} :: ${BUILD_TYPE} mode] >>>>>>>>>>>>>>>>>>> ${command}")

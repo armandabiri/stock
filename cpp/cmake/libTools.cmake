@@ -78,7 +78,7 @@ function(build_shared_library_current DEPENDENCIES VERSION)
     add_library(adroco::${LIBRARY_NAME} ALIAS ${FULL_LIBRARY_NAME})
 endfunction()
 
-function(include_test dependencies)
+function(add_tests dependencies)
     get_filename_component(LIBRARY_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 
     string(TOUPPER "${LIBRARY_NAME}" LIBRARY_UPPERCASE)
@@ -96,26 +96,28 @@ function(include_test dependencies)
     endforeach()
 endfunction()
 
-function(add_gtests)
+function(add_gtests dependencies)
+    get_filename_component(LIBRARY_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
+
+    string(TOUPPER "${LIBRARY_NAME}" LIBRARY_UPPERCASE)
+    set(FULL_LIBRARY_NAME "lib${LIBRARY_UPPERCASE}")
+
+    file(GLOB SRC_LIST
+        "${CMAKE_CURRENT_SOURCE_DIR}/gtest/*.cpp")
+
+    foreach(SRC ${SRC_LIST})
+        get_filename_component(FILENAME ${SRC} NAME_WE)
+        add_executable(${FILENAME} ${SRC})
+        target_sources(${FILENAME} PRIVATE ${CMAKE_SOURCE_DIR}/sources/matrix.natvis)
+
+        target_link_libraries(${FILENAME} PUBLIC ${FULL_LIBRARY_NAME} ${dependencies} GTest::GTest GTest::Main)
+        set_target_properties(${FILENAME} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/gtests) # Set output directory
+        add_test(NAME ${FILENAME} COMMAND ${FILENAME})
+    endforeach()
+
     set(curdir ${CMAKE_CURRENT_SOURCE_DIR})
     file(GLOB libs LIST_DIRECTORIES true RELATIVE ${curdir} ${curdir}/*)
-
-    foreach(lib ${libs})
-        if(IS_DIRECTORY ${curdir}/${lib})
-            message(">>>> Add the gtest for [${lib}]")
-            file(GLOB files "${curdir}/${lib}/test/*.cpp") # Fix path for file globbing
-
-            foreach(file ${files})
-                get_filename_component(test_name ${file} NAME_WE) # Get the base name without extension
-                add_executable(${test_name} "${file}" "sources/matrix.natvis")
-
-                string(TOUPPER ${lib} LIB)
-                target_link_libraries(${test_name} GTest::gtest_main ${LIB})
-                set_target_properties(${test_name} PROPERTIES
-                    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/bin/gtests) # Set output directory
-            endforeach()
-        endif()
-    endforeach()
 endfunction()
 
 function(combine_static_libraries INPUT_LIBRARIES COMBINED_LIBRARY_NAME)
