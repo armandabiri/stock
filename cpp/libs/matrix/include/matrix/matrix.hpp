@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <random>
 #include <functional>
+#include <algorithm>
 #include <cmath>
 #include <omp.h>
 #include <iomanip>  // for std::setw
@@ -35,59 +36,70 @@ template <typename T = double>
 class MatrixX {
  public:
   // Constructor
-  MatrixX() : rows_(0), cols_(0) {}
+  MatrixX() : rows_(0), cols_(0), length_{0} {}
   MatrixX(const size_t& rows, const size_t& cols) : rows_(rows), cols_(cols) {
-    data_.resize(rows_ * cols_);
+    length_ = rows_ * cols_;
+    data_.resize(length_);
   };
-  MatrixX(const size_t& rows, const size_t& cols, T value) : rows_(rows), cols_(cols) {
-    data_.resize(rows_ * cols_, value);
+  MatrixX(const size_t& rows, const size_t& cols, T value) : MatrixX(rows, cols) {
+    std::fill(data_.begin(), data_.end(), value);
   }
 
   MatrixX(const size_t& rows, const size_t& cols, const std::initializer_list<T>& list)
-      : rows_(rows), cols_(cols) {
-    if (list.size() != rows * cols) {
-      throw std::invalid_argument("Initializer list size does not match matrix size");
-    }
-    data_.resize(rows_ * cols_);
-    size_t i = 0;
-    for (auto it = list.begin(); it != list.end(); ++it) {
-      data_[i++] = *it;
-    }
-  }
+      : rows_(rows), cols_(cols), length_(rows * cols), data_(list) {}
 
-  MatrixX(const std::initializer_list<T>& list) : {
-    rows_ = list.size();
-    cols_ = 1;
-    if (list.size() != rows_ * cols_) {
-      throw std::invalid_argument("Initializer list size does not match matrix size");
-    }
-    data_.resize(rows_ * cols_);
-    size_t i = 0;
-    for (auto it = list.begin(); it != list.end(); ++it) {
-      data_[i++] = *it;
-    }
-  }
-
+  MatrixX(const std::initializer_list<T>& list) : MatrixX(1, list.size(), list) {}
   MatrixX(const std::initializer_list<std::initializer_list<T>>& list) {
     rows_ = list.size();
-    cols_ = list.begin()->size();
+    cols_ = (rows_ > 0) ? list.begin()->size() : 0;
+    length_ = rows_ * cols_;
 
-    data_.resize(rows_ * cols_);
+    data_.resize(length_);
+
     size_t i = 0;
     for (auto it = list.begin(); it != list.end(); ++it) {
       if (it->size() != cols_) {
         throw std::invalid_argument("Initializer list size does not match matrix size");
       }
-      for (auto it2 = it->begin(); it2 != it->end(); ++it2) {
-        data_[i++] = *it2;
-        ;
-      }
+
+      // Use std::copy to copy elements of each row to the data_ vector
+      std::copy(it->begin(), it->end(), data_.begin() + i);
+      i += cols_;
     }
   }
 
-  MatrixX(const MatrixX<T>& other) : rows_(other.rows_), cols_(other.cols_), data_(other.data_) {}
+  MatrixX<T>& operator<<(const std::vector<T>& values) {
+    if (values.size() < length_) {
+      throw std::invalid_argument("Incorrect number of values for initialization");
+    }
+
+    // Copy the values to the data_ vector
+    for (size_t i = 0; i < length_; ++i) {
+      data_[i] = values[i];
+    }
+
+    return *this;
+  }
+
+  MatrixX<T>& operator<<(std::initializer_list<T> values) {
+    for (const auto& value : values) {
+      (*this) << value;
+    }
+    return *this;
+  }
+  MatrixX<T>& operator<<(const T& value) {
+    if (index_ < length_) {
+      data_[index_++] = value;
+    }
+
+    return (*this);
+  }
+  MatrixX<T>& operator,(const T& value) { return (*this) << value; }
+
+  MatrixX(const MatrixX<T>& other)
+      : rows_(other.rows_), cols_(other.cols_), length_(other.length_), data_(other.data_) {}
   MatrixX(const VectorX<T>& other)
-      : rows_(other.rows()), cols_(other.cols()), data_(other.data()) {}
+      : rows_(other.rows()), cols_(other.cols()), length_(other.length_), data_(other.data_) {}
 
   /// Call element [] operator
   // T& operator[](const size_t& index) {
@@ -119,37 +131,76 @@ class MatrixX {
       throw std::invalid_argument("Index out of range");
     }
     MatrixX<T> result(1, cols_);
-    for (size_t i = 0; i < cols_; ++i) {
-      result(i) = (*this)(index, i);
+    std::copy(data_.begin() + index * cols_, data_.begin() + (index + 1) * cols_,
+              result.data_.begin());
+
+    return result;
+  }
+
+  // get column
+  const MatrixX<T> col(const size_t& index) const {
+    if (index >= cols_) {
+      throw std::invalid_argument("Index out of range");
+    }
+
+    MatrixX<T> result(rows_, 1);  // Create the result matrix with the correct number of rows
+    for (size_t i = 0; i < rows_; ++i) {
+      result.data_[i] = data_[i * cols_ + index];
     }
     return result;
   }
 
-  // get multiple cols by give the index vector
   MatrixX<T> col(const std::vector<size_t>& indices) const {
+    // Check if all indices are within range
+    if (!std::all_of(indices.begin(), indices.end(), [&](size_t index) { return index < cols_; })) {
+      throw std::invalid_argument("Index out of range");
+    }
+
     MatrixX<T> result(rows_, indices.size());
     for (size_t i = 0; i < indices.size(); ++i) {
-      if (indices[i] >= cols_) {
-        throw std::invalid_argument("Index out of range");
-      }
       for (size_t j = 0; j < rows_; ++j) {
         result(j, i) = (*this)(j, indices[i]);
       }
     }
+
     return result;
   }
 
-  // get multiple cols by give the index vector
   MatrixX<T> row(const std::vector<size_t>& indices) const {
-    MatrixX<T> result(indices.size(), cols_);
-    for (size_t i = 0; i < indices.size(); ++i) {
-      if (indices[i] >= rows_) {
-        throw std::invalid_argument("Index out of range");
-      }
-      for (size_t j = 0; j < cols_; ++j) {
-        result(i, j) = (*this)(indices[i], j);
-      }
+    // Check if all indices are within range
+    if (!std::all_of(indices.begin(), indices.end(), [&](size_t index) { return index < rows_; })) {
+      throw std::invalid_argument("Index out of range");
     }
+
+    MatrixX<T> result(indices.size(), cols_);
+
+    // Copy each row from data_ to result_
+    PARALLEL_FOR_COLLAPSE(1)
+    std::for_each(indices.begin(), indices.end(), [&](size_t index) {
+      std::copy(data_.begin() + index * cols_, data_.begin() + (index + 1) * cols_,
+                result.data_.begin() + ((index - indices.front()) * cols_));
+    });
+
+    return result;
+  }
+
+  MatrixX<T> row(size_t start, size_t end) const {
+    if (start >= rows_ || end >= rows_ || start > end) {
+      throw std::invalid_argument("Index out of range");
+    }
+
+    MatrixX<T> result(end - start + 1, cols_);
+
+    // Generate each row in the specified range
+    size_t rowIndex = start;
+    std::generate(result.data_.begin(), result.data_.end(), [&]() {
+      std::vector<T> rowValues(cols_);
+      std::transform(data_.begin() + rowIndex * cols_, data_.begin() + (rowIndex + 1) * cols_,
+                     rowValues.begin(), [](const T& elem) { return elem; });
+      ++rowIndex;
+      return rowValues;
+    });
+
     return result;
   }
 
@@ -167,31 +218,15 @@ class MatrixX {
     return result;
   }
 
-  // get row in the rang
-  MatrixX<T> row(size_t start, size_t end) const {
-    if (start >= rows_ || end >= rows_ || start > end) {
-      throw std::invalid_argument("Index out of range");
-    }
-    MatrixX<T> result(end - start + 1, cols_);
-    for (size_t i = 0; i < end - start + 1; ++i) {
-      for (size_t j = 0; j < cols_; ++j) {
-        result(i, j) = (*this)(start + i, j);
-      }
-    }
-    return result;
-  }
-
-  // get column
-  const MatrixX<T> col(const size_t& index) const {
-    if (index >= cols_) {
+  // setRow
+  MatrixX<T> setRow(const size_t& index, const MatrixX<T>& vec) {
+    if (index >= rows_ || vec.length() != cols_) {
       throw std::invalid_argument("Index out of range");
     }
 
-    MatrixX<T> result(rows_, 1);
-    for (size_t i = 0; i < rows_; ++i) {
-      result(i) = (*this)(i, index);
-    }
-    return result;
+    std::transform(vec.data_.begin(), vec.data_.end(), data_.begin() + index * cols_,
+                   [&](const T& elem) { return elem; });
+    return *this;
   }
 
   void setCol(const size_t& index, const MatrixX<T>& vec) {
@@ -200,20 +235,8 @@ class MatrixX {
     }
 
     for (size_t i = 0; i < rows_; ++i) {
-      (*this)(i, index) = vec(i);
+      data_[index + i * (cols_)] = vec.data_[i];
     }
-  }
-
-  // setRow
-  MatrixX<T> setRow(const size_t& index, const MatrixX<T>& vec) {
-    if (index >= rows_ || vec.length() != cols_) {
-      throw std::invalid_argument("Index out of range");
-    }
-
-    for (size_t i = 0; i < cols_; ++i) {
-      (*this)(index, i) = vec(i);
-    }
-    return *this;
   }
 
   /// Initialization
@@ -249,14 +272,28 @@ class MatrixX {
 
   /// Basic Operations
   // Transpose
+  // const MatrixX<T>& transpose() {
+  //   // Use std::transform to perform transpose
+  //   std::transform(data_.begin(), data_.end(), data_.begin(), [this](const T& elem) {
+  //     size_t index = (&elem - &data_[0]);
+  //     return data_[(index % rows_) * cols_ + (index / rows_)];
+  //   });
+
+  //   std::swap(rows_, cols_);
+  //   return *this;
+  // }
+
   MatrixX<T> transpose() const {
     MatrixX<T> result(cols_, rows_);
+
+    // Use std::transform to perform transpose
     PARALLEL_FOR_COLLAPSE(2)
     for (size_t i = 0; i < rows_; ++i) {
       for (size_t j = 0; j < cols_; ++j) {
         result(j, i) = (*this)(i, j);
       }
     }
+
     return result;
   }
 
@@ -304,7 +341,7 @@ class MatrixX {
     }
   }
 
-  T mean() const { return sum() / (rows_ * cols_); }
+  T mean() const { return sum() / (length_); }
 
   T prod() const {
     // Use std::accumulate to calculate the product of all elements of the matrix
@@ -352,28 +389,84 @@ class MatrixX {
     return *this / norm();
   }
 
-  T max() const {
-    T result = data_[0];
+  // Method to find the minimum element and its index
+  std::pair<size_t, T> minIndex() const {
+    // Use std::min_element to find the minimum element in the data_
+    auto min_it = std::min_element(data_.begin(), data_.end());
 
-    PARALLEL_FOR_COLLAPSE(2)
-    for (size_t i = 1; i < numel(); ++i) {
-      if (data_[i] > result) {
-        result = data_[i];
-      }
-    }
-    return result;
+    // Get the index of the minimum element
+    size_t index = std::distance(data_.begin(), min_it);
+
+    // Return a pair containing the index and the minimum value
+    return std::make_pair(index, *min_it);
+  }
+
+  // Method to find the maximum element and its index
+  std::pair<size_t, T> maxIndex() const {
+    // Use std::max_element to find the maximum element in the data_
+    auto max_it = std::max_element(data_.begin(), data_.end());
+
+    // Get the index of the maximum element
+    size_t index = std::distance(data_.begin(), max_it);
+
+    // Return a pair containing the index and the maximum value
+    return std::make_pair(index, *max_it);
+  }
+
+  T max() const {
+    // Use std::max_element to find the maximum element in the data_
+    auto max_it = std::max_element(data_.begin(), data_.end());
+
+    // Return the maximum element
+    return *max_it;
   }
 
   T min() const {
-    T result = data_[0];
+    // Use std::max_element to find the maximum element in the data_
+    auto min_it = std::min_element(data_.begin(), data_.end());
 
-    PARALLEL_FOR_COLLAPSE(2)
-    for (size_t i = 1; i < numel(); ++i) {
-      if (data_[i] < result) {
-        result = data_[i];
+    // Return the maximum element
+    return *min_it;
+  }
+
+  MatrixX<T> max(int axis) const {
+    if (axis == 0) {
+      MatrixX<T> result(1, cols_);
+      PARALLEL_FOR_COLLAPSE(2)
+      for (size_t i = 0; i < cols_; ++i) {
+        result(i) = col(i).max();
       }
+      return result;
+    } else if (axis == 1) {
+      MatrixX<T> result(rows_, 1);
+      PARALLEL_FOR_COLLAPSE(2)
+      for (size_t i = 0; i < rows_; ++i) {
+        result(i) = row(i).max();
+      }
+      return result;
+    } else {
+      throw std::invalid_argument("Invalid axis");
     }
-    return result;
+  }
+
+  MatrixX<T> min(int axis) const {
+    if (axis == 0) {
+      MatrixX<T> result(1, cols_);
+      PARALLEL_FOR_COLLAPSE(2)
+      for (size_t i = 0; i < cols_; ++i) {
+        result(i) = col(i).min();
+      }
+      return result;
+    } else if (axis == 1) {
+      MatrixX<T> result(rows_, 1);
+      PARALLEL_FOR_COLLAPSE(2)
+      for (size_t i = 0; i < rows_; ++i) {
+        result(i) = row(i).min();
+      }
+      return result;
+    } else {
+      throw std::invalid_argument("Invalid axis");
+    }
   }
 
   /// Overloaded operator for scalar
@@ -382,6 +475,7 @@ class MatrixX {
       data_ = other.data_;
       rows_ = other.rows_;
       cols_ = other.cols_;
+      length_ = other.length_;
     }
     return *this;
   }
@@ -391,6 +485,7 @@ class MatrixX {
       rows_ = other.rows_;
       cols_ = other.cols_;
       data_ = other.data_;
+      length_ = other.length_;
     }
     return *this;
   }
@@ -399,7 +494,7 @@ class MatrixX {
     MatrixX<T> result(rows_, cols_);
 
     PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
+    for (size_t i = 0; i < length_; ++i) {
       result(i) = data_[i] + scalar;
     }
     return result;
@@ -409,7 +504,7 @@ class MatrixX {
     MatrixX<T> result(rows_, cols_);
 
     PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
+    for (size_t i = 0; i < length_; ++i) {
       result(i) = data_[i] * scalar;
     }
     return result;
@@ -460,8 +555,8 @@ class MatrixX {
       return strassen(other);
     }
 #endif
-
     MatrixX<T> result(rows_, other.cols_);
+
     PARALLEL_FOR_COLLAPSE(2)
     for (size_t i = 0; i < rows_; ++i) {
       for (size_t j = 0; j < other.cols_; ++j) {
@@ -489,11 +584,16 @@ class MatrixX {
   MatrixX<U> elementwise(std::function<U(const T&)> func) const {
     MatrixX<U> result(rows_, cols_);
 
-    PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
-      result(i) = func(data_[i]);
-    }
+    std::transform(data_.begin(), data_.end(), result.data_.begin(),
+                   [&](const T& elem) { return func(elem); });
+
     return result;
+  }
+
+  /// self-elementwise function
+  void selfElementwise(std::function<T(const T&)> func) {
+    std::transform(data_.begin(), data_.end(), data_.begin(),
+                   [&](const T& elem) { return func(elem); });
   }
 
   template <typename U>
@@ -590,8 +690,13 @@ class MatrixX {
   }
 
   //  square root function
-  MatrixX<T> sqrt() const {
+  const MatrixX<T> sqrt() const {
     return elementwise<T>([](T x) { return std::sqrt(x); });
+  }
+
+  //  square  function
+  MatrixX<T> pow2() const {
+    return elementwise<T>([](T x) { return x * x; });
   }
 
   //  exponential function
@@ -616,6 +721,42 @@ class MatrixX {
     T s = elementwise<T>([](T x) { return std::exp(x); }).sum();
     return elementwise<T>([s](T x) { return std::exp(x) / s; });
   }
+
+  // ceil function
+  MatrixX<T> ceil() const {
+    return elementwise<T>([](const T& x) { return std::ceil(x); });
+  }
+
+  // floor function
+  MatrixX<T> floor() const {
+    return elementwise<T>([](const T& x) { return std::floor(x); });
+  }
+
+  // round the matrix to zero if smaller than a threshold
+  MatrixX<T> round(const T& threshold = 1e-6) const {
+    return elementwise<T>([threshold](const T& x) { return (std::abs(x) < threshold) ? 0 : x; });
+  }
+
+  void selfRound(const T& threshold = 1e-6) const {
+    selfElementwise<T>([threshold](const T& x) { return (std::abs(x) < threshold) ? 0 : x; });
+  }
+
+  // bound a matrix
+  MatrixX<T> bound(const T& lowerBound, const T& upperBound) const {
+    return elementwise<T>([lowerBound, upperBound](const T& x) {
+      return std::min(std::max(x, lowerBound), upperBound);
+    });
+  }
+
+  // clip a matrix
+  MatrixX<T> clip(const T& lowerBound, const T& upperBound) const {
+    return elementwise<T>([lowerBound, upperBound](const T& x) {
+      return (x < lowerBound) ? lowerBound : (x > upperBound) ? upperBound : x;
+    });
+  }
+
+  // clip a matrix
+  MatrixX<T> clip(const std::pair<T, T>& bounds) const { return clip(bounds.first, bounds.second); }
 
   /// Inverse
   // MatrixX inv using Gaussian elimination (without pivoting)
@@ -694,7 +835,6 @@ class MatrixX {
     }
     return result;
   }
-
   static void DivideAndConquer(std::vector<T>& vec,
                                std::function<void(std::vector<T>&)> operation) {
     // Base case: If the vector is empty or has only one element, apply the operation directly
@@ -735,41 +875,75 @@ class MatrixX {
     return result;
   }
 
-  std::pair<MatrixX<T>, MatrixX<T>> LU() const {
+  // adjoint
+  MatrixX<T> adjoint() const {
+    if (rows_ != cols_) {
+      throw std::invalid_argument("MatrixX must be square for adjoint calculation");
+    }
+
+    MatrixX<T> result(rows_, cols_);
+    PARALLEL_FOR_COLLAPSE(2)
+    for (size_t i = 0; i < rows_; ++i) {
+      for (size_t j = 0; j < cols_; ++j) {
+        result(i, j) = cofactor(i, j);
+      }
+    }
+
+    return result.transpose();
+  }
+
+  // lu decomposition using pivot matrix
+  std::tuple<MatrixX<T>, MatrixX<T>, MatrixX<T>> lu() const {
     if (rows_ != cols_) {
       throw std::invalid_argument("MatrixX must be square for LU decomposition");
     }
 
-    L = MatrixX<T>(rows_, cols_);  // Initialize L as identity matrix
-    U = *this;                     // Initialize U as a copy of the input matrix
+    MatrixX<T> L(rows_, cols_);
+    MatrixX<T> U(rows_, cols_);
+    MatrixX<T> P(rows_, cols_);
+    P.eye();
 
-    for (size_t k = 0; k < rows_; ++k) {
-      // Find the pivot row
-      size_t pivotRow = k;
-      for (size_t i = k + 1; i < rows_; ++i) {
-        if (std::abs(U(i, k)) > std::abs(U(pivotRow, k))) {
-          pivotRow = i;
+    // Copy the matrix to U
+    U = *this;
+
+    // Perform the LU decomposition
+    for (size_t i = 0; i < rows_; ++i) {
+      // Partial pivoting: find pivot row
+      size_t rp = i;
+      T max_val = std::abs(U(i, i));
+      for (size_t k = i + 1; k < rows_; k++) {
+        if (std::abs(U(k, i)) > max_val) {
+          max_val = std::abs(U(k, i));
+          rp = k;
         }
       }
-
-      // Swap rows in U matrix
-      if (pivotRow != k) {
-        std::swap(U.data[k], U.data[pivotRow]);
+      // Swap rows
+      if (rp != i) {
+        U.swapRows(i, rp);
+        P.swapRows(i, rp);
+        L.swapRows(i, rp);
       }
-
-      // Swap rows in L matrix
-      std::swap(L.data[k], L.data[pivotRow]);
 
       // Perform elimination
-      for (size_t i = k + 1; i < rows_; ++i) {
-        T factor = U(i, k) / U(k, k);
-        L(i, k) = factor;
-        for (size_t j = k; j < cols_; ++j) {
-          U(i, j) -= factor * U(k, j);
+      for (size_t j = i + 1; j < rows_; ++j) {
+        T factor = U(j, i) / U(i, i);
+        for (size_t k = i; k < rows_; ++k) {
+          U(j, k) -= factor * U(i, k);
         }
+        U(j, i) = factor;
       }
     }
-    return std::make_pair(L, U);
+
+    // Extract L
+    for (size_t i = 0; i < rows_; ++i) {
+      L(i, i) = 1;
+      for (size_t j = 0; j < i; ++j) {
+        L(i, j) = U(i, j);
+        U(i, j) = 0;
+      }
+    }
+
+    return std::make_tuple(L, U, P);
   }
 
   MatrixX<T> pinv(const MatrixX<T>& matrix, const T& tol = std::numeric_limits<T>::epsilon()) {
@@ -799,9 +973,7 @@ class MatrixX {
     }
 
     for (size_t k = 0; k < cols_; ++k) {
-      T temp = (*this)(i, k);
-      (*this)(i, k) = (*this)(j, k);
-      (*this)(j, k) = temp;
+      std::swap(data_[i * cols_ + k], data_[j * cols_ + k]);
     }
   }
 
@@ -811,38 +983,33 @@ class MatrixX {
       return;
     }
 
-    PARALLEL_ENABLED(1)
     for (size_t k = 0; k < rows_; ++k) {
-      T temp = (*this)(k, i);
-      (*this)(k, i) = (*this)(k, j);
-      (*this)(k, j) = temp;
+      std::swap(data_[i + k * cols_], data_[j + k * cols_]);
     }
   }
 
   // gaussianElimination
   static MatrixX<T> GaussianElimination(const MatrixX<T>& matrix) {
     MatrixX<T> result = matrix;
-    size_t n = matrix.rows();
+    size_t rows_ = matrix.rows();
 
-    for (size_t i = 0; i < n; ++i) {
+    for (size_t r = 0; r < rows_; ++r) {
       // Find the pivot row
-      size_t pivotRow = i;
-      for (size_t j = i + 1; j < n; ++j) {
-        if (std::abs(result(j, i)) > std::abs(result(pivotRow, i))) {
-          pivotRow = j;
-        }
-      }
+      auto maxRowIter =
+          std::max_element(result.data_.begin() + r * rows_, result.data_.end(),
+                           [&](const T& a, const T& b) { return std::abs(a) < std::abs(b); });
+      size_t rp = std::distance(result.data_.begin(), maxRowIter) / rows_;
 
       // Swap rows
-      if (pivotRow != i) {
-        result.swapRows(i, pivotRow);
+      if (rp != r) {
+        result.swapRows(r, rp);
       }
 
       // Perform elimination
-      for (size_t j = i + 1; j < n; ++j) {
-        T factor = result(j, i) / result(i, i);
-        for (size_t k = i; k < n; ++k) {
-          result(j, k) -= factor * result(i, k);
+      for (size_t j = r + 1; j < rows_; ++j) {
+        T factor = result(j, r) / result(r, r);
+        for (size_t k = r; k < rows_; ++k) {
+          result(j, k) -= factor * result(r, k);
         }
       }
     }
@@ -1050,7 +1217,7 @@ class MatrixX {
     }
 
     PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
+    for (size_t i = 0; i < length_; ++i) {
       if (data_[i] != other(i)) {
         return false;
       }
@@ -1118,6 +1285,32 @@ class MatrixX {
     return elementwise<T>(other, [&](const T& x, const T& y) { return x != y; });
   }
 
+  // do column-wise sum
+  MatrixX<T> rowPlus(const MatrixX<T>& vec = 0) const {
+    MatrixX<T> result = *this;
+    if (vec.cols() != cols_ && vec.rows() != 1) {
+      throw std::invalid_argument("Invalid vector dimensions for row-wise sum");
+    }
+    for (size_t i = 0; i < length_; i++) {
+      result.data_[i] += vec.data_[i % vec.length_];
+    }
+
+    return result;
+  }
+
+  // do column-wise sum
+  MatrixX<T> colPlus(const MatrixX<T>& vec = 0) const {
+    MatrixX<T> result = *this;
+    if (vec.rows() != rows_ && vec.cols() != 1) {
+      throw std::invalid_argument("Invalid vector dimensions for column-wise sum");
+    }
+    for (size_t i = 0; i < length_; i++) {
+      result.data_[i] += vec.data_[i / cols_];
+    }
+
+    return result;
+  }
+
   /// Casting
   // cast to another type
   template <typename U>
@@ -1125,7 +1318,7 @@ class MatrixX {
     MatrixX<U> result(rows_, cols_);
 
     PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
+    for (size_t i = 0; i < length_; ++i) {
       result(i) = static_cast<U>(data_[i]);
     }
 
@@ -1134,10 +1327,10 @@ class MatrixX {
 
   // cast to std::vector
   std::vector<T> toVector() const {
-    std::vector<T> result(rows_ * cols_);
+    std::vector<T> result(length_);
 
     PARALLEL_FOR_COLLAPSE(1)
-    for (size_t i = 0; i < numel(); ++i) {
+    for (size_t i = 0; i < length_; ++i) {
       result(i) = data_[i];
     }
 
@@ -1149,7 +1342,7 @@ class MatrixX {
   void resize(size_t rows, size_t cols) {
     rows_ = rows;
     cols_ = cols;
-    data_.resize(rows_ * cols_, 0.0);
+    data_.resize(length_, 0.0);
   }
 
   // column concetenate two matrices
@@ -1209,16 +1402,11 @@ class MatrixX {
 
   // reshape the matrix
   MatrixX<T> reshape(const size_t& rows, const size_t& cols) const {
-    if (rows * cols != numel()) {
+    if (rows * cols != length_) {
       throw std::invalid_argument("New shape must be compatible with the number of elements");
     }
 
-    MatrixX<T> result(rows, cols);
-
-    PARALLEL_FOR_COLLAPSE(2)
-    for (size_t i = 0; i < numel(); ++i) {
-      result(i) = (*this)(i);
-    }
+    MatrixX<T> result(rows, cols, data_);
 
     return result;
   }
@@ -1277,14 +1465,18 @@ class MatrixX {
   };
 
   /// Printing
-  void print() { std::cout << *this; }
+  void print(const std::string& header = "\nA=", const std::string& footer = "\n") {
+    std::cout << header.c_str() << *this << footer.c_str();
+  }
   friend std::ostream& operator<<(std::ostream& os, const MatrixX<T>& matrix) {
-    os << std::setw(8) << std::fixed << std::setprecision(2) << "\n";
+    os << std::fixed << std::setprecision(2);
     for (size_t i = 0; i < matrix.rows(); ++i) {
       for (size_t j = 0; j < matrix.cols(); ++j) {
         os << matrix(i, j) << ", ";
       }
-      os << std::endl;
+      if (i < matrix.rows() - 1) {
+        os << std::endl;
+      }
     }
     return os;
   }
@@ -1304,10 +1496,10 @@ class MatrixX {
   }
 
   void save(std::ofstream& file) const {
-    std::cout << "Saving matrix to file" << std::endl;
     file.write(reinterpret_cast<const char*>(&rows_), sizeof(size_t));
     file.write(reinterpret_cast<const char*>(&cols_), sizeof(size_t));
-    file.write(reinterpret_cast<const char*>(data_.data()), sizeof(T) * numel());
+    file.write(reinterpret_cast<const char*>(&length_), sizeof(size_t));
+    file.write(reinterpret_cast<const char*>(data_.data()), sizeof(T) * length_);
   }
 
   /// Loading Data
@@ -1328,8 +1520,9 @@ class MatrixX {
   void load(std::ifstream& file) {
     file.read(reinterpret_cast<char*>(&rows_), sizeof(size_t));
     file.read(reinterpret_cast<char*>(&cols_), sizeof(size_t));
-    data_.resize(rows_ * cols_);
-    file.read(reinterpret_cast<char*>(data_.data()), sizeof(T) * rows_ * cols_);
+    file.read(reinterpret_cast<char*>(&length_), sizeof(size_t));
+    data_.resize(length_);
+    file.read(reinterpret_cast<char*>(data_.data()), sizeof(T) * length_);
   }
 
   static MatrixX<T> Load(const std::string& filename) {
@@ -1429,8 +1622,10 @@ class MatrixX {
 
  protected:
   std::vector<T> data_;
-  size_t rows_;
-  size_t cols_;
+  size_t rows_{0};
+  size_t cols_{0};
+  size_t length_{0};
+  size_t index_{0};
 };
 
 template <typename T>

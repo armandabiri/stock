@@ -17,12 +17,27 @@ class VectorX : public MatrixX<T> {
   VectorX(const size_t& size1, const T& value = 0, const size_t& size2 = 1)
       : MatrixX<T>(size1, size2, value) {}
 
-  VectorX(std::initializer_list<T> list) : MatrixX<T>(list.size(), 1) {
-    size_t i = 0;
-    for (auto it = list.begin(); it != list.end(); ++it) {
-      this->data_[i++] = *it;
-    }
+  VectorX(std::initializer_list<T> list) : MatrixX<T>(list.size(), 1, list) {}
+
+  VectorX<T>& operator<<(const std::vector<T>& values) {
+    this->resize(values.size(), 1);
+    std::copy(values.begin(), values.end(), data_.end() - values.size());
+    return *this;
   }
+
+  VectorX<T>& operator<<(std::initializer_list<T> values) {
+    this->resize(values.size(), 1);
+    std::copy(values.begin(), values.end(), data_.end() - values.size());
+    return *this;
+  }
+
+  VectorX<T>& operator<<(const T& value) {
+    data_.resize(this->numel() + 1);
+    data_.back() = value;
+    return *this;
+  }
+
+  VectorX<T>& operator,(const T& value) { return *this << value; }
 
   VectorX<T> cross(const VectorX<T>& other) const {
     if (this->numel() != 3 || other.numel() != 3) {
@@ -41,17 +56,6 @@ class VectorX : public MatrixX<T> {
   void resize(size_t size) { this->resize(size, 1); }
 
   /// overloaded operators
-  VectorX<T> operator+(const VectorX<T>& other) const {
-    if (this->numel() != other.numel()) {
-      throw std::invalid_argument("Vector sizes do not match");
-    }
-    VectorX<T> result(this->numel());
-    for (size_t i = 0; i < numel(); ++i) {
-      result(i) = (*this)(i) + other(i);
-    }
-    return result;
-  }
-
   // Define operator* for matrix * vector
   friend VectorX<T> operator*(const MatrixX<T>& matrix, const VectorX<T>& vector) {
     if (vector.rows_ != matrix.cols()) {
@@ -71,15 +75,6 @@ class VectorX : public MatrixX<T> {
       result(i) = sum;
     }
 
-    return result;
-  }
-
-  // transpose
-  VectorX<T> transpose() const {
-    MatrixX<T> result(this->cols_, this->rows_);
-    for (size_t i = 0; i < this->numel(); ++i) {
-      result(i) = (*this)(i);
-    }
     return result;
   }
 

@@ -8,7 +8,7 @@ int main() {
   matrix::Vector output =
       nn::ActivationFunction::Apply(input_vector, nn::ActivationFunction::Type::RELU);
   matrix::Vector doutput =
-      nn::ActivationFunction::Diff(input_vector, nn::ActivationFunction::Type::RELU);
+      nn::ActivationFunction::Diff(input_vector, input_vector, nn::ActivationFunction::Type::RELU);
   matrix::Vector toutput;
 
   toutput = output.transpose();

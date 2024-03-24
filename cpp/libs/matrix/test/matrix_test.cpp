@@ -49,6 +49,7 @@ int main() {
       std::cout << "A.trace(): " << A.trace() << std::endl;
       std::cout << "A.diag(): " << A.diag() << std::endl;
       std::cout << "A.det(): " << A.det() << std::endl;
+      std::cout << "A.sqrt(): " << A.pow2() << std::endl;
     }
 
     {
@@ -69,11 +70,70 @@ int main() {
   }
 
   {
-    matrix::Matrix C{{1, 1, 3}, {4, 1, 6}, {7, 8, 9}};
-    {
-      std::cout << "C.col(0)" << C.col(0);
-      std::cout << "GaussianElimination" << matrix::Matrix::GaussianElimination(C) << std::endl;
+    matrix::Matrix C{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    std::cout << "C:\n" << C << std::endl;
+
+    for (size_t i = 0; i < C.rows(); i++) {
+      std::cout << "C.row(" << i << ")\n" << C.row(i) << std::endl;
     }
+    for (size_t i = 0; i < C.cols(); i++) {
+      std::cout << "C.col(" << i << ")\n" << C.col(i) << std::endl;
+    }
+
+    std::cout << "C.row(1)\n" << C.row(std::vector<size_t>{1, 2}) << std::endl;
+  }
+
+  {
+    matrix::ones A(3, 4);
+    matrix::ones B(1, 4);
+    matrix::ones C(3, 1);
+    std::cout << "A.rowPlus(B) \n" << A.rowPlus(B) << std::endl;
+    std::cout << "A.colPlus(C) \n" << A.colPlus(C) << std::endl;
+  }
+
+  // transpose
+  {
+    matrix::Matrix A{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    matrix::ones B(1, 3);
+    std::cout << "A*B' " << A * B.transpose() << std::endl;
+  }
+
+  {
+    {
+      matrix::Matrix C{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+      std::cout << "C: " << C << std::endl;
+      std::cout << "C.row(1)" << C.row(std::vector<size_t>{1, 2});
+      std::cout << "C.col(2)" << C.col(std::vector<size_t>{1, 2});
+      C.swapCols(1, 2);
+
+      std::cout << "C.swapCols(1, 2)" << C;
+
+      C.swapRows(1, 2);
+
+      std::cout << "C.swapRows(1, 2)" << C;
+    }
+
+    matrix::Matrix C{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    {
+      auto LUP = C.lu();
+      std::cout << "L: " << std::get<0>(LUP) << std::endl;
+      std::cout << "U: " << std::get<1>(LUP) << std::endl;
+
+      std::cout << "C: " << std::get<2>(LUP) * std::get<0>(LUP) * std::get<1>(LUP) << std::endl;
+    }
+
+    std::cout << "GaussianElimination" << matrix::Matrix::GaussianElimination(C) << std::endl;
+  }
+
+  {
+    matrix::Matrix C{{1, 2, 3}, {4, 5, 6}, {7, 8, 10}};
+    {
+      std::cout << "C: " << C << std::endl;
+      std::cout << "C.row(1)" << C.row(std::vector<size_t>{1, 2});
+      std::cout << "C.col(2)" << C.col(std::vector<size_t>{1, 2});
+    }
+
+    std::cout << "GaussianElimination" << matrix::Matrix::GaussianElimination(C) << std::endl;
 
     {
       std::pair<matrix::Matrix, matrix::Matrix> qr = C.qr();
@@ -126,6 +186,13 @@ int main() {
   //   matrix::Matrix Y = matrix::Matrix::Load("X.txt");
   //   std::cout << "error: " << (X - Y).norm() << std::endl;
   // }
+
+  {
+    matrix::Matrix A{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    A.save("A.txt");
+    matrix::Matrix B = matrix::Matrix::Load("A.txt");
+    std::cout << "error: " << (A - B).norm() << std::endl;
+  }
 
   {
     size_t N = 200;
